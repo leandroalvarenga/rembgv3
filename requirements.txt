@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+rembg
+pillow
+numpy
+torch
+torchvision
+torchaudio
+onnxruntime
+python-multipart
+requests
+mysql-connector-python
