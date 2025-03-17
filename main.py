@@ -2,7 +2,12 @@ from fastapi import FastAPI, UploadFile, File, Form
 from rembg import remove
 from PIL import Image
 import io
+import os
 from modelos import get_modelo
+
+# Garantir que a pasta modelos existe
+if not os.path.exists("modelos"):
+    os.makedirs("modelos")
 
 app = FastAPI()
 
