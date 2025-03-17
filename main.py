@@ -1,27 +1,65 @@
-from fastapi import FastAPI, UploadFile, File, Form
-from rembg import remove
-from PIL import Image
-import io
 import os
-from modelos import get_modelo
+import requests
+import mysql.connector
+from rembg.session_factory import new_session
 
-# Garantir que a pasta modelos existe
-if not os.path.exists("modelos"):
-    os.makedirs("modelos")
+MODEL_DIR = "modelos"
 
-app = FastAPI()
+# Criar diretório se não existir
+if not os.path.exists(MODEL_DIR):
+    os.makedirs(MODEL_DIR)
 
-@app.post("/remover_fundo/")
-async def remover_fundo(file: UploadFile = File(...), modelo: str = Form("Padrão")):
-    modelo_escolhido = get_modelo(modelo)
-    if not modelo_escolhido:
-        return {"erro": "Modelo inválido"}
+MODELOS = {
+    "Padrão": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx",
+    "Plus": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx",
+    "Retrato": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/BiRefNet-portrait-epoch_150.onnx",
+    "Ilustração": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-anime.onnx"
+}
+
+# Configuração do MySQL via variáveis de ambiente
+DB_CONFIG = {
+    "host": os.getenv("DB_HOST"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "database": os.getenv("DB_NAME")
+}
+
+def conectar_db():
+    return mysql.connector.connect(**DB_CONFIG)
+
+def baixar_modelo(nome, url):
+    caminho = os.path.join(MODEL_DIR, f"{nome}.onnx")
     
-    image = Image.open(io.BytesIO(await file.read()))
-    output = remove(image, session=modelo_escolhido)
+    # Se o modelo já existe localmente, usa ele
+    if os.path.exists(caminho):
+        return caminho
     
-    img_byte_arr = io.BytesIO()
-    output.save(img_byte_arr, format='PNG')
-    img_byte_arr = img_byte_arr.getvalue()
+    print(f"Baixando modelo {nome}...")
+    resposta = requests.get(url)
+    with open(caminho, "wb") as f:
+        f.write(resposta.content)
     
-    return {"imagem": img_byte_arr.hex()}
+    # Tenta salvar no banco (se falhar, o modelo ainda estará salvo localmente)
+    try:
+        conn = conectar_db()
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO modelos (nome, modelo) VALUES (%s, %s)", (nome, resposta.content))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Erro ao salvar no banco: {e}")
+    
+    return caminho
+
+def get_modelo(apelido):
+    if apelido in MODELOS:
+        caminho = baixar_modelo(apelido, MODELOS[apelido])
+        return new_session(caminho)
+    return None
+
+# Criar tabela no MySQL (rode isso uma vez manualmente no banco)
+# CREATE TABLE modelos (
+#    id INT AUTO_INCREMENT PRIMARY KEY,
+#    nome VARCHAR(50) UNIQUE,
+#    modelo LONGBLOB
+# );
