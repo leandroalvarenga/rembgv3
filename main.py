@@ -2,13 +2,13 @@ from fastapi import FastAPI, UploadFile, File, Form
 from rembg import remove
 from PIL import Image
 import io
-import modelos
+from modelos import get_modelo
 
 app = FastAPI()
 
 @app.post("/remover_fundo/")
 async def remover_fundo(file: UploadFile = File(...), modelo: str = Form("Padrão")):
-    modelo_escolhido = modelos.get_modelo(modelo)
+    modelo_escolhido = get_modelo(modelo)
     if not modelo_escolhido:
         return {"erro": "Modelo inválido"}
     
